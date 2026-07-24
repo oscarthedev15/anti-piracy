@@ -1,5 +1,6 @@
 # Core pipeline has NO runtime dependencies (stdlib only) — demo + tests run
-# with a bare Python 3.10+. The extras below are only for the API gateway and
+# with a bare Python 3.9+ (verified on 3.9 and 3.11). The extras below are only
+# for the API gateway and
 # the production adapters you'll fill in.
 
 # --- API gateway ---

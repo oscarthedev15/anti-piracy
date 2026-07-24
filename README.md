@@ -45,10 +45,13 @@ reference an ISP or judge can audit before acting.
 
 ## Quickstart (zero dependencies)
 
+**Requirements:** Python 3.9+ only. The core pipeline, demo, and tests are
+stdlib-only — no `pip install`, no venv, no services. (Verified on 3.9 and 3.11.)
+
 ```bash
 # from the repo root — core pipeline is stdlib-only
-python -m demo.run_pipeline     # runnable end-to-end scenario
-python -m tests.test_pipeline   # behaviour tests
+python3 -m demo.run_pipeline     # runnable end-to-end scenario
+python3 -m tests.test_pipeline   # behaviour tests
 ```
 
 The demo runs the canonical scenario: one operator streams the same match across

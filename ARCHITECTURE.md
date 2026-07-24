@@ -120,3 +120,43 @@ regimes.
 5. **Reviewer console** on the API (approve/deny IP blocks, inspect evidence).
 6. **Forensic watermark extraction** for source attribution.
 7. **Signed evidence export** in a format prosecutors/ISPs accept.
+
+## 7. AI/ML roadmap (design intent — not yet implemented)
+
+ML expands **recall and prediction**; the deterministic graph, guardrails, and
+evidence chain remain the auditable system of record. Nothing here replaces the
+explainable core — a black-box score is never the sole basis for a block.
+
+**Detection (highest value, highest risk — build first).**
+- Perceptual/robust video hashing + a self-supervised frame-embedding encoder,
+  so a match survives re-encode, crop, letterbox, and logo overlay.
+- Forensic watermark extraction via a CNN decoder to identify the *leaking
+  subscriber source*, not merely that infringement occurred.
+- Audio fingerprinting (spectrogram embeddings) as a cheap parallel signal when
+  the video is obfuscated.
+
+**Discovery.**
+- LLM triage/agent to classify crawl candidates ("infringing live-sports portal?")
+  and parse messy aggregator/social pages into structured `StreamObservation`s.
+- Embedding similarity over DOM/text/favicon to surface sibling portals of a
+  known operator; semantic search over social chatter for event-time spikes.
+
+**Attribution (augment, don't replace, the explainable core).**
+- GNN / node2vec link prediction: score whether a new domain belongs to an
+  existing operator, surfacing pivots the hand-written `STRONG_PIVOTS` miss.
+- Weighted community detection (Louvain/Leiden) replacing connected-components
+  at scale, with the strong/weak split preserved as edge weights.
+- ML *proposes*; the transparent connected-components result *justifies*.
+
+**Blocklist / decisioning.**
+- Calibrated confidence models (conformal prediction for guaranteed error
+  bounds) gating the human-review threshold on IP blocks.
+- Anomaly detection on infrastructure churn to predict *when* an operator hops
+  next → time the preemptive queue.
+
+**Cross-cutting.**
+- RAG-backed evidence summarization: an LLM drafts prosecutor-ready enforcement
+  rationale from the hash-chained evidence (ground truth), so it cannot
+  hallucinate the facts.
+- Human-in-the-loop feedback: reviewer approve/deny decisions become training
+  signal for the attribution and confidence models.
