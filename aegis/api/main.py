@@ -14,6 +14,8 @@ no such dependency and is exercised by demo/run_pipeline.py without a server.
 """
 from __future__ import annotations
 
+from typing import Optional
+
 try:
     from fastapi import FastAPI
     from pydantic import BaseModel
@@ -25,6 +27,17 @@ from aegis.pipeline import Pipeline
 from aegis.models import StreamObservation, to_json
 
 
+# Defined at module scope (not inside create_app) so the request-body type
+# resolves under `from __future__ import annotations` — a function-local model
+# leaves `list[Observation]` as an unresolvable forward ref and FastAPI/pydantic
+# fail with "class not fully defined". Optional[str] (not `str | None`) keeps the
+# Python 3.9 floor honest.
+class Observation(BaseModel):
+    url: str
+    source: str = "api"
+    event_hint: Optional[str] = None
+
+
 def create_app():
     if FastAPI is None:
         raise RuntimeError("Install fastapi + uvicorn to run the API gateway.")
@@ -32,11 +45,6 @@ def create_app():
     app = FastAPI(title="AEGIS", version="0.1.0",
                   description="Anti-piracy Enforcement & Graph Intelligence System")
     pipeline = Pipeline.demo_instance()
-
-    class Observation(BaseModel):
-        url: str
-        source: str = "api"
-        event_hint: str | None = None
 
     @app.post("/observations")
     def add_observations(items: list[Observation]):

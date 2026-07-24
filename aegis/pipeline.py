@@ -17,7 +17,7 @@ from aegis.models import (
     DetectionResult,
     StreamObservation,
 )
-from aegis.services.detection.matcher import DetectionService, StubFingerprintBackend
+from aegis.services.detection.matcher import DetectionService
 from aegis.services.attribution.graph import AttributionGraph
 from aegis.services.blocklist.generator import BlocklistGenerator
 from aegis.services.evidence.ledger import EvidenceLedger
@@ -61,12 +61,16 @@ class Pipeline:
     # -- convenience factory used by the API and quickstart -----------------
     @classmethod
     def demo_instance(cls) -> "Pipeline":
-        evidence = EvidenceLedger()
-        graph = AttributionGraph()
-        detector = DetectionService(
-            backend=StubFingerprintBackend(),
-            reference_ids=["feed:epl-main"],
-            evidence=evidence,
-        )
-        blocklister = BlocklistGenerator(graph=graph, evidence=evidence)
-        return cls(detector, graph, blocklister, evidence)
+        """Seeded pipeline for the API gateway: the same synthetic scenario the
+        CLI demo runs, pre-loaded with observations so the endpoints return live
+        attribution/blocklist data the moment the server boots.
+
+        Reuses ``build_pipeline`` as the single wiring source (no duplication).
+        The import is lazy so importing ``aegis.pipeline`` never hard-depends on
+        the ``demo`` package.
+        """
+        from demo.run_pipeline import build_pipeline
+        from demo.synthetic_data import OBSERVATIONS
+        pipe = build_pipeline()
+        pipe.add_observations(list(OBSERVATIONS))
+        return pipe
