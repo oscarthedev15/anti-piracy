@@ -51,10 +51,14 @@ class HeuristicStreamBackend:
 
     method = "heuristic"  # DetectionService labels DetectionResult with this
 
-    def __init__(self, timeout: float = 8.0, max_bytes: int = 500_000):
+    def __init__(self, timeout: float = 6.0, max_bytes: int = 500_000,
+                 html_cache: Optional[dict[str, str]] = None):
         self.timeout = timeout
         self.max_bytes = max_bytes
         self._cache: dict[str, tuple[float, list[str]]] = {}
+        # Shared page store: pages already fetched by the crawler land here, so
+        # detection never re-downloads them. Populated externally.
+        self._html_cache: dict[str, str] = html_cache if html_cache is not None else {}
 
     # ---- network ---------------------------------------------------------
     def _is_public_host(self, host: str) -> bool:
@@ -67,6 +71,8 @@ class HeuristicStreamBackend:
         return True
 
     def _fetch(self, url: str) -> str:
+        if url in self._html_cache:
+            return self._html_cache[url]   # already fetched by the crawler
         host = urlparse(url).hostname
         if not host or not self._is_public_host(host):
             return ""   # SSRF guard: never fetch internal/unresolvable hosts
@@ -76,7 +82,9 @@ class HeuristicStreamBackend:
                 raw = resp.read(self.max_bytes)
         except Exception:
             return ""
-        return raw.decode("utf-8", errors="replace")
+        html = raw.decode("utf-8", errors="replace")
+        self._html_cache[url] = html
+        return html
 
     # ---- scoring ---------------------------------------------------------
     def _signals(self, html: str, reference_id: str) -> tuple[float, list[str]]:

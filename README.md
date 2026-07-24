@@ -73,6 +73,20 @@ python3 -m aegis.live https://host-a.example/live https://host-b.example/live \
     --event "EPL: Team A vs Team B"
 ```
 
+**Discovery (don't hand-feed URLs).** Point it at a seed portal you already know
+and it crawls that site for candidate stream/event pages and third-party iframe
+embed domains, then runs the whole pipeline on what it finds:
+
+```bash
+python3 -m aegis.live --crawl https://portal.example/ --event "live sports" \
+    --max-pages 25 --limit 20
+```
+
+One seed expands into the site's full catalogue (in testing, a single landing
+page yielded 57 candidate event pages). The crawler and detector share one page
+cache, so nothing is fetched twice. `--limit` bounds how many candidates are
+scored per run and reports how many were deferred (never a silent cap).
+
 For each URL this really: fetches and scores the page, enriches confirmed hosts
 with real DNS/TLS/ASN, clusters hosts that share a real cert or dedicated IP into
 one operator, emits a collateral-damage-guarded blocklist from the real ASN data,
@@ -120,7 +134,15 @@ tests/                      behaviour tests
 DNS/TLS/ASN), attribution/clustering, precision blocklist, evidence chain, and a
 real heuristic detector all work on live inputs — see "Run it for real" above.
 
-Still stubbed / next up: the **perceptual-fingerprint / watermark** backend
-(needs a licensed reference feed) and **automated discovery** collectors. The
-`demo/` path remains a deterministic synthetic scenario for tests. See
-`ARCHITECTURE.md` for the full design and roadmap.
+Discovery now has a **real local crawler** (`--crawl`): seed a portal, it
+harvests candidate stream/event pages and embed domains and runs them through
+the pipeline.
+
+The remaining ceiling is **detection on JS-rendered / multi-layer portals**: on
+real aggregators the manifest lives 2–3 clicks deep behind JavaScript and on a
+separate embed domain, so a static-HTML classifier sees only weak signals. The
+next build is a **headless-render collector** (Playwright/Chromium — free, not
+stdlib) that executes the page JS, catches the `.m3u8`, and follows the embed
+domain into attribution. The **perceptual-fingerprint / watermark** backend
+(needs a licensed reference feed) is the other stub. The `demo/` path remains a
+deterministic synthetic scenario for tests. See `ARCHITECTURE.md`.
