@@ -1,0 +1,26 @@
+# Reference dev topology. The core pipeline is a single service today; the
+# commented services show where the real system fans out. Bring up just the API:
+#   docker compose up api
+services:
+  api:
+    build: .
+    command: uvicorn aegis.api.main:app --host 0.0.0.0 --port 8080 --reload
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/app
+    environment:
+      - AEGIS_ENV=dev
+
+  # --- scale-out targets (stubs today, uncomment as you implement) ---
+  # graph:
+  #   image: neo4j:5
+  #   environment: [ "NEO4J_AUTH=neo4j/aegis" ]
+  #   ports: [ "7474:7474", "7687:7687" ]
+  #
+  # discovery-worker:
+  #   build: .
+  #   command: python -m aegis.services.discovery.worker
+  #
+  # queue:
+  #   image: redis:7

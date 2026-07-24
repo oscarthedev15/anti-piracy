@@ -1,0 +1,18 @@
+# Core pipeline has NO runtime dependencies (stdlib only) — demo + tests run
+# with a bare Python 3.10+. The extras below are only for the API gateway and
+# the production adapters you'll fill in.
+
+# --- API gateway ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+
+# --- suggested for real collectors / detection (uncomment as you build) ---
+# httpx>=0.27              # async collectors
+# playwright>=1.44         # headless crawling of JS stream portals
+# imagehash>=4.3           # perceptual fingerprinting
+# opencv-python-headless   # frame sampling
+# dnspython>=2.6           # passive DNS / resolution pivots
+# cryptography>=42         # TLS cert fingerprint extraction
+# neo4j>=5.19              # graph store for attribution at scale
+# pytest>=8.0              # test runner
