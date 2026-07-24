@@ -88,6 +88,7 @@ class DetectionService:
             url=obs.url,
             matched=matched,
             protected_asset=best_ref if matched else None,
+            match_method=getattr(self.backend, "method", "fingerprint"),
             match_score=best_score,
             confidence=_confidence(best_score),
             evidence_ref=evidence_ref,

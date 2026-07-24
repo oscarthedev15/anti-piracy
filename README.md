@@ -60,6 +60,34 @@ into one operator via shared cert + dedicated IP, emits three FQDN blocks and a
 single dedicated-IP block, refuses to block the shared Cloudflare front, and
 proves its evidence chain is intact.
 
+## Run it for real (no synthetic data, still zero-install)
+
+The attribution, blocklist and evidence stages run on **real, free, public
+infrastructure metadata** — resolved DNS, live TLS certificate fingerprints, and
+ASN/owner from Team Cymru's free service — all stdlib-only. Detection runs a real
+page-signal classifier (HLS/DASH manifests, player libraries, live-event
+language).
+
+```bash
+python3 -m aegis.live https://host-a.example/live https://host-b.example/live \
+    --event "EPL: Team A vs Team B"
+```
+
+For each URL this really: fetches and scores the page, enriches confirmed hosts
+with real DNS/TLS/ASN, clusters hosts that share a real cert or dedicated IP into
+one operator, emits a collateral-damage-guarded blocklist from the real ASN data,
+and hash-chains the evidence.
+
+**Honest limits (these are physics, not cost):**
+- *Detection* is structural resemblance ("is this a live-stream portal?"), **not**
+  licensed-content proof — true content match needs the rights holder's reference
+  feed, which no one can do for free. Confidence is capped accordingly.
+- *"Dedicated IP"* is inferred from ASN (not a known shared CDN/cloud/VPS) and
+  flagged for review — not proven single-tenancy.
+- *Discovery* (auto-finding candidate URLs) is the one genuinely fragile-for-free
+  stage; v1 takes URLs you supply (a watchlist / tip-offs), which is how real
+  enforcement tip lines already work.
+
 ## Run the API
 
 ```bash
@@ -88,7 +116,11 @@ tests/                      behaviour tests
 
 ## Status
 
-Skeleton. The attribution, blocklist, evidence and orchestration logic is real
-and tested on synthetic data. The collectors and the perceptual-fingerprint /
-watermark backends are interface stubs marked `TODO` — those are where the build
-effort goes next. See `ARCHITECTURE.md` for the full design and roadmap.
+**Runs end-to-end on real data, free and stdlib-only.** Enrichment (real
+DNS/TLS/ASN), attribution/clustering, precision blocklist, evidence chain, and a
+real heuristic detector all work on live inputs — see "Run it for real" above.
+
+Still stubbed / next up: the **perceptual-fingerprint / watermark** backend
+(needs a licensed reference feed) and **automated discovery** collectors. The
+`demo/` path remains a deterministic synthetic scenario for tests. See
+`ARCHITECTURE.md` for the full design and roadmap.

@@ -97,22 +97,29 @@ class AttributionGraph:
         return [self.assets[a] for a in cluster
                 if self.assets[a].type == AssetType.DOMAIN]
 
+    def _domain_count(self, cluster: set[str]) -> int:
+        return sum(1 for a in cluster
+                   if self.assets[a].type == AssetType.DOMAIN)
+
+    def operator_clusters_multi(self) -> list[set[str]]:
+        """Only clusters that tie together 2+ DOMAINS are 'operators'. A lone
+        domain (plus its own cert/IP nodes) is just one site, not a network."""
+        return [c for c in self.operator_clusters() if self._domain_count(c) >= 2]
+
     # ---- the payoff: predict the next hop --------------------------------
     def known_operator_assets(self) -> dict[str, str]:
         """Map every asset id -> a stable operator cluster label. A brand-new
         domain sharing a strong pivot with any of these is instantly attributable
         to a known operator (early-warning, before it streams)."""
         labels: dict[str, str] = {}
-        for i, cluster in enumerate(self.operator_clusters()):
-            if len(cluster) < 2:
-                continue  # singletons aren't operators yet
+        for i, cluster in enumerate(self.operator_clusters_multi()):
             label = f"OP-{i:04d}"
             for a in cluster:
                 labels[a] = label
         return labels
 
     def summarise(self) -> dict:
-        clusters = [c for c in self.operator_clusters() if len(c) > 1]
+        clusters = self.operator_clusters_multi()
         return {
             "assets": len(self.assets),
             "edges": len(self.edges),

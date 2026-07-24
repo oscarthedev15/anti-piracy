@@ -31,11 +31,16 @@ class PipelineResult:
 
 class Pipeline:
     def __init__(self, detector: DetectionService, graph: AttributionGraph,
-                 blocklister: BlocklistGenerator, evidence: EvidenceLedger):
+                 blocklister: BlocklistGenerator, evidence: EvidenceLedger,
+                 enricher=None):
         self.detector = detector
         self.graph = graph
         self.blocklister = blocklister
         self.evidence = evidence
+        # Optional live enricher (LiveEnrichment). When set, confirmed hosts are
+        # enriched with real DNS/TLS/ASN data and their pivot edges written to
+        # the graph. When None (demo/tests), the graph is pre-seeded instead.
+        self.enricher = enricher
         self._observations: list[StreamObservation] = []
         self.last_blocklist: list[BlocklistEntry] = []
 
@@ -48,7 +53,11 @@ class Pipeline:
         for det in detections:
             if det.matched:
                 host = urlparse(det.url).netloc or det.url
-                self.graph.upsert_asset(AssetType.DOMAIN, host)
+                if self.enricher is not None:
+                    # real DNS/TLS/ASN -> real assets + pivot edges
+                    self.enricher.enrich_into_graph(host, self.graph)
+                else:
+                    self.graph.upsert_asset(AssetType.DOMAIN, host)
         blocklist = self.blocklister.generate(detections)
         for entry in blocklist:
             self.evidence.record(kind="blocklist", subject=entry.target,
