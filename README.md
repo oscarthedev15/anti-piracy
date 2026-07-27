@@ -130,14 +130,22 @@ The crawler expands a portal you already have; **discovery** surfaces new ones.
   load; the source retries and fails soft.)
 - **Seed crawl** — REAL. Wraps the aggregator crawler.
 - **Reverse-infra pivot** (`--reverse <confirmed-domain>`) — REAL. From one
-  confirmed site, read the operator's other domains off the served TLS cert's
-  SANs (with an invalid-cert fallback via `cryptography`) plus crt.sh history.
-  High yield when an operator reuses one cert across brands; low when each brand
-  has its own cert (then the reverse-IP path below is what links them).
+  confirmed site, pivot to the operator's other domains two ways:
+  - **shared cert** — read sibling domains off the served TLS cert's SANs (with
+    an invalid-cert fallback via `cryptography`) plus crt.sh history;
+  - **same-IP co-hosting** — HackerTarget free reverse-IP for other domains on
+    the origin. Guarded twice: it **skips CDN fronts** (a Cloudflare IP fronts
+    millions of sites), and it **suppresses shared-hosting IPs** — if an IP has
+    more than ~25 tenants it's a cPanel/reseller box, not one operator, so its
+    co-tenants are dropped as noise (reported, not silent).
 - **Public-blocklist, search-engine, social/Telegram** — SKELETON interfaces
-  with documented next steps (no fake data). Reverse-**IP** co-hosting (the pivot
-  that links different-brand sites on one origin) needs a passive-DNS provider
-  and is stubbed as the next extension.
+  with documented next steps (no fake data).
+
+> Real-world note: pointing reverse-IP at a known sports-piracy domain returned
+> 500+ unrelated tenants (adult sites, e-commerce, webmail) — i.e. it sits on
+> shared hosting, so "same IP / same /24" there is **not** proof of one operator.
+> The guard catches exactly this. Treat a same-subnet *suspected* link as a lead
+> to corroborate with reverse-IP, not a verdict.
 
 ```bash
 python3 -m aegis.live --discover-ct "crackstreams,streameast" --headless

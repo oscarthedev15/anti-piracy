@@ -14,9 +14,12 @@ Status of each source is marked REAL or SKELETON:
                                       come online — often before they're indexed
                                       anywhere else. Free, no key.
   REAL      SeedCrawlSource         — wraps the aggregator crawler.
-  SKELETON  ReverseInfraSource      — from a KNOWN operator's cert/IP, pivot to its
-                                      other domains (CT cert search / passive DNS).
-  SKELETON  PublicBlocklistSource   — ingest existing public anti-piracy blJocklists
+  REAL      ReverseInfraSource      — from a confirmed domain, pivot to siblings via
+                                      the served cert's SANs + crt.sh history.
+  REAL      ReverseIPSource         — from a confirmed domain, find other domains
+                                      co-hosted on the same origin IP (HackerTarget
+                                      free reverse-IP). Guarded to skip CDN fronts.
+  SKELETON  PublicBlocklistSource   — ingest existing public anti-piracy blocklists
                                       / community lists as candidate seeds.
   SKELETON  SearchEngineSource      — query engines for "<event> free live stream".
   SKELETON  SocialTelegramSource    — monitor public channels where links are posted.
@@ -206,6 +209,92 @@ class ReverseInfraSource:
     # Extension: reverse-IP co-hosting via passive DNS (needs a provider key).
     def reverse_ip_todo(self, ip: str) -> list[str]:  # pragma: no cover
         return []
+
+
+class ReverseIPSource:
+    """REAL. From a confirmed domain, find OTHER domains co-hosted on the same
+    origin IP — the operator's other brands parked on one box.
+
+    Uses HackerTarget's free (no-key, rate-limited) reverse-IP lookup. Critically
+    guarded: reverse-IP is only run on VPS/dedicated IPs, NEVER on a CDN/cloud
+    front (a Cloudflare IP fronts millions of unrelated sites, so the result
+    would be pure noise). That guard is the same "don't treat shared infra as an
+    operator" principle used everywhere else.
+    """
+    name = "reverse_ip"
+    PROVIDER = "https://api.hackertarget.com/reverseiplookup/?q="
+
+    def __init__(self, domains: Optional[list[str]] = None,
+                 ips: Optional[list[str]] = None, timeout: float = 12.0,
+                 per_ip_limit: int = 500, skip_cdn: bool = True,
+                 shared_host_threshold: int = 25):
+        self.seed_domains = [d.strip().lower() for d in (domains or [])]
+        self.seed_ips = ips or []
+        self.timeout = timeout
+        self.per_ip_limit = per_ip_limit
+        self.skip_cdn = skip_cdn
+        # If an IP hosts more than this many domains it is shared hosting
+        # (cPanel/reseller), not one operator's box — its co-tenants are noise.
+        self.shared_host_threshold = shared_host_threshold
+        self.last_skipped: list[dict] = []   # IPs suppressed as shared hosting
+
+    def _lookup_ip(self, ip: str) -> list[str]:
+        req = Request(self.PROVIDER + quote(ip),
+                      headers={"User-Agent": _UA, "Accept": "text/plain"})
+        try:
+            with urlopen(req, timeout=self.timeout) as resp:
+                text = resp.read().decode("utf-8", "replace")
+        except Exception:
+            return []
+        low = text.lower()
+        if "api count exceeded" in low or "error" in low[:40]:
+            return []   # rate-limited or bad input — fail soft
+        out: list[str] = []
+        for line in text.splitlines():
+            d = line.strip().lower().lstrip("*.")
+            if d and "." in d and d not in out:
+                out.append(d)
+        return out[: self.per_ip_limit]
+
+    def discover(self) -> Iterable[StreamObservation]:
+        from aegis.asn_registry import classify
+        from aegis.services.enrichment.live import LiveEnrichment
+
+        enr = LiveEnrichment(timeout=self.timeout)
+        targets: list[tuple[str, str]] = []  # (ip, pivot_label)
+        for d in self.seed_domains:
+            e = enr.enrich(d)
+            if not e.ips:
+                continue
+            if self.skip_cdn and classify(e.asn) == "cdn":
+                continue  # reverse-IP on a CDN front is meaningless
+            targets.append((e.ips[0], d))
+        for ip in self.seed_ips:
+            targets.append((ip, ip))
+
+        seen = set(self.seed_domains)
+        self.last_skipped = []
+        for ip, pivot in targets:
+            cohosted = self._lookup_ip(ip)
+            # Shared-hosting guard: a box with dozens of unrelated tenants is not
+            # one operator — its co-tenants are noise, so suppress them.
+            if len(cohosted) > self.shared_host_threshold:
+                self.last_skipped.append({"ip": ip, "pivot": pivot,
+                                          "cohosting_count": len(cohosted)})
+                continue
+            for d in cohosted:
+                if d in seen:
+                    continue
+                seen.add(d)
+                yield StreamObservation(
+                    url=f"https://{d}/",
+                    source="reverse_ip",
+                    event_hint=None,
+                    raw={"pivot_from": pivot, "co_hosted_ip": ip,
+                         "cohosting_count": len(cohosted),
+                         "reason": f"co-hosted with {pivot} on {ip} "
+                                   f"({len(cohosted)} tenants — small, likely same op)"},
+                )
 
 
 class PublicBlocklistSource:

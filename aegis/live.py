@@ -83,16 +83,22 @@ def run_live(urls: list[str], event_hint: str = "live stream",
         print(f"      CT logs surfaced {len(ct)} domain(s).", flush=True)
         observations.extend(ct)
 
-    # --- discovery: reverse-infra pivot from a confirmed site ---
+    # --- discovery: reverse pivots from a confirmed site (cert + co-hosting) ---
     if reverse_from:
         from aegis.services.discovery.sources import (
-            ReverseInfraSource, DiscoveryOrchestrator)
-        print(f"[0] Discovery: reverse-infra pivot from confirmed {reverse_from}…",
+            ReverseInfraSource, ReverseIPSource, DiscoveryOrchestrator)
+        print(f"[0] Discovery: reverse pivots from confirmed {reverse_from} "
+              "(shared cert + same-IP co-hosting)…", flush=True)
+        sib = list(DiscoveryOrchestrator([
+            ReverseInfraSource([reverse_from]),
+            ReverseIPSource([reverse_from]),
+        ]).run())
+        by = {}
+        for o in sib:
+            by[o.source] = by.get(o.source, 0) + 1
+        print(f"      pivot surfaced {len(sib)} sibling domain(s): "
+              + (", ".join(f"{k}={v}" for k, v in sorted(by.items())) or "none"),
               flush=True)
-        sib = list(DiscoveryOrchestrator(
-            [ReverseInfraSource([reverse_from])]).run())
-        print(f"      pivot surfaced {len(sib)} sibling domain(s) "
-              "(shared cert / CT history).", flush=True)
         observations.extend(sib)
 
     # --- discovery: crawl a seed portal (expand a known site) ---

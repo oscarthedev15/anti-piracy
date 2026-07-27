@@ -117,6 +117,21 @@ def test_reverse_infra_excludes_seed_and_dedupes():
     assert all(o.raw["pivot_from"] == "seed.tv" for o in obs)
 
 
+def test_reverse_ip_emits_cohosted_domains():
+    """Reverse-IP surfaces co-hosted domains for a given IP (network-free:
+    stub the provider lookup, drive via the ips= path to skip enrichment)."""
+    from aegis.services.discovery.sources import ReverseIPSource
+
+    class _Stub(ReverseIPSource):
+        def _lookup_ip(self, ip):
+            return ["brand-a.tv", "brand-b.cc", "brand-b.cc"]  # dup on purpose
+
+    obs = list(_Stub(ips=["203.0.113.9"]).discover())
+    assert sorted(o.url for o in obs) == [
+        "https://brand-a.tv/", "https://brand-b.cc/"]
+    assert all(o.raw["co_hosted_ip"] == "203.0.113.9" for o in obs)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
