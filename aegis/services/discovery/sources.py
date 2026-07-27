@@ -121,21 +121,90 @@ class SeedCrawlSource:
 # SKELETON sources — clear interface, documented next steps, no fake data
 # --------------------------------------------------------------------------
 class ReverseInfraSource:
-    """SKELETON. Given a known operator's TLS cert hash or origin IP, find its
-    OTHER domains — the highest-yield pivot once you have one confirmed site.
+    """REAL. Given one or more CONFIRMED domains, pivot to the operator's OTHER
+    domains — the highest-yield discovery once you have a single confirmed site.
 
-    Build: crt.sh advanced search by cert SHA-256, and/or a passive-DNS provider
-    (reverse-IP) to list co-hosted domains. Feed results back as candidates.
+    Two free signals, no API key:
+      1. Live TLS SANs — the cert served for the confirmed site frequently lists
+         every domain it covers in Subject Alternative Names. A cert covering
+         several different-brand domains is a strong same-operator link.
+      2. crt.sh history — all names ever seen on certs mentioning the domain
+         (catches rotated subdomains / related names over time).
+
+    Reverse-IP (other domains co-hosted on the same origin) needs a passive-DNS
+    provider and is left as a documented extension below.
     """
     name = "reverse_infra"
 
-    def __init__(self, cert_hashes: Optional[list[str]] = None,
-                 ips: Optional[list[str]] = None):
-        self.cert_hashes = cert_hashes or []
-        self.ips = ips or []
+    def __init__(self, domains: Optional[list[str]] = None,
+                 timeout: float = 6.0, use_crtsh: bool = True,
+                 crtsh_limit: int = 60):
+        self.seed_domains = [d.strip().lower() for d in (domains or [])]
+        self.timeout = timeout
+        self.use_crtsh = use_crtsh
+        self.crtsh_limit = crtsh_limit
+
+    def _san_names(self, host: str) -> list[str]:
+        import socket
+        import ssl
+        # 1) strict handshake: parsed SANs for a cert that validates.
+        ctx = ssl.create_default_context()
+        try:
+            with socket.create_connection((host, 443), timeout=self.timeout) as s:
+                with ctx.wrap_socket(s, server_hostname=host) as ss:
+                    cert = ss.getpeercert()
+            out = [v.strip().lower().lstrip("*.")
+                   for typ, v in cert.get("subjectAltName", ())
+                   if typ.lower() == "dns"]
+            if out:
+                return out
+        except Exception:
+            pass
+        # 2) fallback: pirate sites often serve certs that don't validate. Read
+        #    the SANs off the raw cert anyway (needs `cryptography`; no-op without).
+        try:
+            from cryptography import x509
+        except Exception:
+            return []
+        try:
+            unv = ssl._create_unverified_context()
+            with socket.create_connection((host, 443), timeout=self.timeout) as s:
+                with unv.wrap_socket(s, server_hostname=host) as ss:
+                    der = ss.getpeercert(binary_form=True)
+            cert = x509.load_der_x509_certificate(der)
+            ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            return [n.strip().lower().lstrip("*.")
+                    for n in ext.value.get_values_for_type(x509.DNSName)]
+        except Exception:
+            return []
+
+    def _crtsh_siblings(self, domain: str) -> list[str]:
+        # reuse the CT source's resilient fetch
+        rows = CertTransparencySource([domain], per_keyword_limit=self.crtsh_limit,
+                                      timeout=self.timeout)._query(domain)
+        return rows
 
     def discover(self) -> Iterable[StreamObservation]:
-        # TODO: crt.sh cert-hash search + passive-DNS reverse-IP lookup.
+        seen: set[str] = set(self.seed_domains)
+        for seed in self.seed_domains:
+            siblings: set[str] = set(self._san_names(seed))
+            if self.use_crtsh:
+                siblings.update(self._crtsh_siblings(seed))
+            for d in sorted(siblings):
+                if not d or d in seen:
+                    continue
+                seen.add(d)
+                yield StreamObservation(
+                    url=f"https://{d}/",
+                    source="reverse_infra",
+                    event_hint=None,
+                    raw={"pivot_from": seed,
+                         "reason": "shares a TLS cert / CT history with a "
+                                   "confirmed operator domain"},
+                )
+
+    # Extension: reverse-IP co-hosting via passive DNS (needs a provider key).
+    def reverse_ip_todo(self, ip: str) -> list[str]:  # pragma: no cover
         return []
 
 

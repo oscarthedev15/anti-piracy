@@ -100,6 +100,23 @@ def test_discovery_orchestrator_dedupes_and_survives_bad_source():
         "https://a.tv/", "https://b.tv/", "https://c.tv/"]
 
 
+def test_reverse_infra_excludes_seed_and_dedupes():
+    """Reverse pivot emits siblings, never the seed itself, deduped
+    (network-free: stub the cert/CT lookups)."""
+    from aegis.services.discovery.sources import ReverseInfraSource
+
+    class _Stub(ReverseInfraSource):
+        def _san_names(self, host):        # pretend the cert lists two brands
+            return ["seed.tv", "brand-b.cc"]
+        def _crtsh_siblings(self, domain):
+            return ["brand-b.cc", "brand-c.io"]   # b is a dup
+
+    obs = list(_Stub(["seed.tv"]).discover())
+    urls = sorted(o.url for o in obs)
+    assert urls == ["https://brand-b.cc/", "https://brand-c.io/"]  # no seed.tv
+    assert all(o.raw["pivot_from"] == "seed.tv" for o in obs)
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

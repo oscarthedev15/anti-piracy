@@ -55,7 +55,8 @@ def run_live(urls: list[str], event_hint: str = "live stream",
              crawl_seeds: Optional[list[str]] = None,
              max_pages: int = 25, limit: int = 20,
              headless: bool = False,
-             ct_keywords: Optional[list[str]] = None) -> None:
+             ct_keywords: Optional[list[str]] = None,
+             reverse_from: Optional[str] = None) -> None:
     # One page store shared by crawler + detector: fetch each URL at most once.
     html_cache: dict[str, str] = {}
 
@@ -81,6 +82,18 @@ def run_live(urls: list[str], event_hint: str = "live stream",
             [CertTransparencySource(ct_keywords)]).run())
         print(f"      CT logs surfaced {len(ct)} domain(s).", flush=True)
         observations.extend(ct)
+
+    # --- discovery: reverse-infra pivot from a confirmed site ---
+    if reverse_from:
+        from aegis.services.discovery.sources import (
+            ReverseInfraSource, DiscoveryOrchestrator)
+        print(f"[0] Discovery: reverse-infra pivot from confirmed {reverse_from}…",
+              flush=True)
+        sib = list(DiscoveryOrchestrator(
+            [ReverseInfraSource([reverse_from])]).run())
+        print(f"      pivot surfaced {len(sib)} sibling domain(s) "
+              "(shared cert / CT history).", flush=True)
+        observations.extend(sib)
 
     # --- discovery: crawl a seed portal (expand a known site) ---
     if crawl_seeds:
@@ -196,6 +209,7 @@ def main() -> None:
     event_hint = event_hint or "live stream"
     crawl_seed, args = _take_opt(args, "--crawl")
     ct_arg, args = _take_opt(args, "--discover-ct")
+    reverse_from, args = _take_opt(args, "--reverse")
     max_pages_s, args = _take_opt(args, "--max-pages")
     max_pages = int(max_pages_s) if max_pages_s and max_pages_s.isdigit() else 25
     limit_s, args = _take_opt(args, "--limit")
@@ -207,7 +221,8 @@ def main() -> None:
     run_live(args, event_hint=event_hint,
              crawl_seeds=[crawl_seed] if crawl_seed else None,
              max_pages=max_pages, limit=limit,
-             headless=headless, ct_keywords=ct_keywords)
+             headless=headless, ct_keywords=ct_keywords,
+             reverse_from=reverse_from)
 
 
 if __name__ == "__main__":

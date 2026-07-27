@@ -129,11 +129,19 @@ The crawler expands a portal you already have; **discovery** surfaces new ones.
   to catch them as they appear. Free, no key. (crt.sh is flaky and 502s under
   load; the source retries and fails soft.)
 - **Seed crawl** — REAL. Wraps the aggregator crawler.
-- **Reverse-infra, public-blocklist, search-engine, social/Telegram** — SKELETON
-  interfaces with documented next steps (no fake data).
+- **Reverse-infra pivot** (`--reverse <confirmed-domain>`) — REAL. From one
+  confirmed site, read the operator's other domains off the served TLS cert's
+  SANs (with an invalid-cert fallback via `cryptography`) plus crt.sh history.
+  High yield when an operator reuses one cert across brands; low when each brand
+  has its own cert (then the reverse-IP path below is what links them).
+- **Public-blocklist, search-engine, social/Telegram** — SKELETON interfaces
+  with documented next steps (no fake data). Reverse-**IP** co-hosting (the pivot
+  that links different-brand sites on one origin) needs a passive-DNS provider
+  and is stubbed as the next extension.
 
 ```bash
 python3 -m aegis.live --discover-ct "crackstreams,streameast" --headless
+python3 -m aegis.live --reverse totalsportek.com --headless   # pivot from a confirmed site
 ```
 
 ## Attribution sweep (who is linked to whom)
