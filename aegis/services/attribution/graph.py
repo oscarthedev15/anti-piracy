@@ -126,3 +126,62 @@ class AttributionGraph:
             "operators": len(clusters),
             "largest_operator_size": max((len(c) for c in clusters), default=0),
         }
+
+    # ---- tier 2: suspected links (weak co-location, for human review) -----
+    def suspected_links(self) -> list[dict]:
+        """Domains that share a hosting neighbourhood but NOT a strong pivot.
+
+        Same /24 on a VPS/hosting ASN is a lead worth investigating, not proof
+        of one operator (unrelated tenants share these ranges), so these are
+        surfaced for review rather than merged into a confirmed cluster. Big
+        CDN/cloud fronts (Cloudflare/AWS/…) are excluded — their ranges are
+        meaningless for attribution.
+        """
+        from aegis.asn_registry import classify
+
+        # group domains by (asn, /24)
+        groups: dict[tuple[str, str], set[str]] = defaultdict(set)
+        for a in self.assets.values():
+            if a.type != AssetType.IP:
+                continue
+            asn_str = a.attributes.get("asn")            # e.g. "AS63949"
+            if not asn_str:
+                continue
+            try:
+                asn_int = int(asn_str.replace("AS", ""))
+            except ValueError:
+                continue
+            if classify(asn_int) == "cdn":
+                continue  # shared front — co-location is meaningless
+            octets = a.value.split(".")
+            if len(octets) != 4:
+                continue
+            slash24 = ".".join(octets[:3]) + ".0/24"
+            for nbr in self._adj.get(a.id, set()):
+                n = self.assets[nbr]
+                if n.type == AssetType.DOMAIN:
+                    groups[(asn_str, slash24)].add(n.value)
+
+        confirmed = {frozenset(self.domains_and_values(c))
+                     for c in self.operator_clusters_multi()}
+
+        out: list[dict] = []
+        for (asn_str, net), domains in groups.items():
+            if len(domains) < 2:
+                continue
+            # skip if these domains are already a confirmed operator
+            if any(domains <= c for c in confirmed):
+                continue
+            out.append({
+                "domains": sorted(domains),
+                "shared_network": net,
+                "asn": asn_str,
+                "confidence": "suspected",
+                "reason": (f"{len(domains)} domains co-located in {net} on "
+                           f"{asn_str} (shared host — review, not proof)."),
+            })
+        return out
+
+    def domains_and_values(self, cluster: set[str]) -> set[str]:
+        return {self.assets[a].value for a in cluster
+                if self.assets[a].type == AssetType.DOMAIN}

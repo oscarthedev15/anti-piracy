@@ -102,6 +102,25 @@ and hash-chains the evidence.
   stage; v1 takes URLs you supply (a watchlist / tip-offs), which is how real
   enforcement tip lines already work.
 
+## Attribution sweep (who is linked to whom)
+
+Enrich a batch of domains and see the two tiers of linkage on real data:
+
+```bash
+python3 -m aegis.sweep totalsportek.com crackstreams.net example.com www.example.com
+```
+
+- **CONFIRMED operators** — tied by a strong pivot (shared TLS cert / same
+  dedicated server). Auto-merged; treat as one operator.
+- **SUSPECTED links** — merely co-located in the same hosting /24 on a VPS
+  network. A lead for a human to investigate, **not** proof (unrelated tenants
+  share those ranges), so never auto-merged. Big CDN/cloud ranges
+  (Cloudflare/AWS/…) are excluded from this tier — their /24s are meaningless.
+
+In a real run this correctly surfaced two different-brand sports-piracy domains
+co-located on one Linode /24 as a *suspected* link, while keeping Cloudflare-
+fronted sites `do_not_block`.
+
 ## Run the API
 
 ```bash

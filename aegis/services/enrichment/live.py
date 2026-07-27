@@ -22,29 +22,9 @@ import ssl
 from dataclasses import dataclass, field
 from typing import Optional
 
+from aegis.asn_registry import classify, name_for
 from aegis.models import Asset, AssetType
 from aegis.services.attribution.graph import AttributionGraph
-
-
-# ASNs that host many unrelated tenants. An IP here is NEVER treated as a
-# dedicated single-tenant origin, and the major CDNs/clouds/resolvers are hard
-# "do not IP-block" (matches BlocklistGenerator.CRITICAL_INFRA_ASNS). This is the
-# real-data version of the "don't nuke Cloudflare" guardrail.
-SHARED_HOSTING_ASNS = {
-    13335: "Cloudflare",
-    15169: "Google",
-    16509: "Amazon/AWS",
-    20940: "Akamai",
-    8075: "Microsoft",
-    54113: "Fastly",
-    16625: "Akamai",
-    13414: "Twitter/X",
-    32934: "Meta",
-    14061: "DigitalOcean",   # shared VPS: cheap to co-tenant, don't IP-block
-    16276: "OVH",
-    24940: "Hetzner",
-    14618: "Amazon",
-}
 
 
 @dataclass
@@ -151,12 +131,16 @@ class LiveEnrichment:
         # Dedicated only if we have a positive ASN signal AND that ASN is not a
         # known multi-tenant host. Absent proof, default to NOT dedicated so the
         # blocklist stays FQDN-only (never an unjustified IP block).
-        if result.asn is not None and result.asn not in SHARED_HOSTING_ASNS:
+        cls = classify(result.asn)
+        if cls == "cdn":
+            result.note = f"Shared CDN/cloud front ({name_for(result.asn)})."
+        elif cls == "vps":
+            result.note = (f"Shared VPS host ({name_for(result.asn)}); a specific "
+                           "IP may be single-tenant but same-/24 neighbours may not.")
+        elif result.asn is not None:
             result.dedicated = True
-            result.note = ("ASN not on the shared-hosting list; candidate "
-                           "single-tenant origin (verify before IP block).")
-        elif result.asn in SHARED_HOSTING_ASNS:
-            result.note = f"Shared infrastructure ({SHARED_HOSTING_ASNS[result.asn]})."
+            result.note = ("ASN not a known CDN/VPS; candidate single-tenant "
+                           "origin (verify before IP block).")
         else:
             result.note = "ASN unavailable; treating as shared (FQDN-only)."
         return result

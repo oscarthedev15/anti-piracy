@@ -31,15 +31,7 @@ from aegis.models import (
 from aegis.services.attribution.graph import AttributionGraph
 
 
-# In production this comes from a maintained dataset (CDN published ranges,
-# public-resolver lists, MX/AS ownership). Kept as a small set for the demo.
-CRITICAL_INFRA_ASNS = {
-    "AS13335",   # Cloudflare
-    "AS15169",   # Google
-    "AS16509",   # Amazon / AWS
-    "AS20940",   # Akamai
-    "AS8075",    # Microsoft
-}
+from aegis.asn_registry import is_shared_front
 
 
 class BlocklistGenerator:
@@ -50,9 +42,15 @@ class BlocklistGenerator:
         self.default_ttl = default_ttl
 
     def _ip_safety(self, ip_asset: Asset) -> BlockSafety:
-        asn = ip_asset.attributes.get("asn")
-        if asn in CRITICAL_INFRA_ASNS:
-            return BlockSafety.DO_NOT_BLOCK
+        asn_str = ip_asset.attributes.get("asn")   # e.g. "AS13335"
+        asn_int = None
+        if asn_str:
+            try:
+                asn_int = int(asn_str.replace("AS", ""))
+            except ValueError:
+                asn_int = None
+        if is_shared_front(asn_int):
+            return BlockSafety.DO_NOT_BLOCK   # never IP-block a shared CDN/cloud
         # dedicated => only this operator's assets resolve here
         if ip_asset.attributes.get("dedicated") is True:
             return BlockSafety.IP_SAFE

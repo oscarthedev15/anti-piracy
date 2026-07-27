@@ -45,6 +45,35 @@ def test_evidence_chain_intact():
     assert len(pipe.evidence) >= 3
 
 
+def test_same_subnet_is_suspected_not_confirmed():
+    """Two brands on the same VPS /24 (different IPs) surface as a SUSPECTED
+    link, and are NOT auto-merged into a confirmed operator."""
+    from aegis.services.attribution.graph import AttributionGraph
+    from aegis.models import AssetType
+    g = AttributionGraph()
+    for host, ip in [("brand-a.tv", "172.237.146.18"),
+                     ("brand-b.cc", "172.237.146.46")]:
+        d = g.upsert_asset(AssetType.DOMAIN, host)
+        i = g.upsert_asset(AssetType.IP, ip, asn="AS63949", dedicated=True)
+        g.link(d, i, "RESOLVES_TO_DEDICATED_IP")
+    assert g.operator_clusters_multi() == []          # not confirmed
+    links = g.suspected_links()
+    assert len(links) == 1
+    assert set(links[0]["domains"]) == {"brand-a.tv", "brand-b.cc"}
+
+
+def test_cdn_subnet_is_never_suspected():
+    """Same /24 on a CDN (Cloudflare) is meaningless — must not be flagged."""
+    from aegis.services.attribution.graph import AttributionGraph
+    from aegis.models import AssetType
+    g = AttributionGraph()
+    for host, ip in [("x.tv", "104.21.5.9"), ("y.cc", "104.21.5.40")]:
+        d = g.upsert_asset(AssetType.DOMAIN, host)
+        i = g.upsert_asset(AssetType.IP, ip, asn="AS13335")
+        g.link(d, i, "RESOLVES_TO_SHARED_IP")
+    assert g.suspected_links() == []
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
