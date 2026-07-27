@@ -8,12 +8,16 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2.6
 
-# --- suggested for real collectors / detection (uncomment as you build) ---
-# httpx>=0.27              # async collectors
-# playwright>=1.44         # headless crawling of JS stream portals
-# imagehash>=4.3           # perceptual fingerprinting
+# --- optional: headless detection (JS-rendered portals) ---
+# Enables aegis.live --headless (network manifest capture). After install run:
+#   playwright install chromium
+playwright>=1.44
+
+# --- suggested for further build-out (uncomment as you go) ---
+# imagehash>=4.3           # perceptual fingerprinting (licensed-content proof)
 # opencv-python-headless   # frame sampling
-# dnspython>=2.6           # passive DNS / resolution pivots
-# cryptography>=42         # TLS cert fingerprint extraction
 # neo4j>=5.19              # graph store for attribution at scale
 # pytest>=8.0              # test runner
+#
+# Note: DNS resolution, TLS cert fingerprints, ASN lookups and CT-log discovery
+# are all implemented with the Python standard library — no extra deps needed.

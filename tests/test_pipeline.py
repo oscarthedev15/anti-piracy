@@ -74,6 +74,32 @@ def test_cdn_subnet_is_never_suspected():
     assert g.suspected_links() == []
 
 
+def test_discovery_orchestrator_dedupes_and_survives_bad_source():
+    """The orchestrator unions sources, dedupes by URL, and a throwing source
+    never sinks the run (network-free: uses in-memory fake sources)."""
+    from aegis.services.discovery.sources import DiscoveryOrchestrator
+    from aegis.models import StreamObservation
+
+    class _Fake:
+        name = "fake"
+        def __init__(self, urls): self._urls = urls
+        def discover(self):
+            return [StreamObservation(url=u, source="fake") for u in self._urls]
+
+    class _Broken:
+        name = "broken"
+        def discover(self):
+            raise RuntimeError("source is down")
+
+    out = DiscoveryOrchestrator([
+        _Fake(["https://a.tv/", "https://b.tv/"]),
+        _Broken(),                       # must not sink the union
+        _Fake(["https://b.tv/", "https://c.tv/"]),  # b is a dup
+    ]).run()
+    assert sorted(o.url for o in out) == [
+        "https://a.tv/", "https://b.tv/", "https://c.tv/"]
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

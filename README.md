@@ -102,6 +102,40 @@ and hash-chains the evidence.
   stage; v1 takes URLs you supply (a watchlist / tip-offs), which is how real
   enforcement tip lines already work.
 
+## Headless detection (JS-rendered portals)
+
+Real aggregators inject the stream via JavaScript, so static HTML shows nothing.
+`--headless` renders the page in a real (headless Chromium) browser and watches
+the **network**: when the player boots it *fetches* the `.m3u8`/`.mpd` manifest,
+and catching that request is the definitive tell. It also captures the iframe
+**embed domains** (usually the real operator) and enriches them into attribution.
+
+```bash
+pip install playwright && playwright install chromium     # one-time, ~90 MB, free
+python3 -m aegis.live https://match-page.example/ --headless --event "EPL"
+```
+
+Verified: on a JS-HLS test page this captured 6 manifest requests (score 0.90)
+that the static classifier could not see, and pulled the embed host into the graph.
+It renders and observes requests; it never plays or downloads the video itself.
+
+## Discovery: finding domains you don't know yet
+
+The crawler expands a portal you already have; **discovery** surfaces new ones.
+`aegis/services/discovery/sources.py` is a pluggable set:
+
+- **Certificate Transparency** (`--discover-ct "kw1,kw2"`) — REAL. New pirate
+  domains get TLS certs, published in public CT logs (crt.sh); search by keyword
+  to catch them as they appear. Free, no key. (crt.sh is flaky and 502s under
+  load; the source retries and fails soft.)
+- **Seed crawl** — REAL. Wraps the aggregator crawler.
+- **Reverse-infra, public-blocklist, search-engine, social/Telegram** — SKELETON
+  interfaces with documented next steps (no fake data).
+
+```bash
+python3 -m aegis.live --discover-ct "crackstreams,streameast" --headless
+```
+
 ## Attribution sweep (who is linked to whom)
 
 Enrich a batch of domains and see the two tiers of linkage on real data:
@@ -153,15 +187,14 @@ tests/                      behaviour tests
 DNS/TLS/ASN), attribution/clustering, precision blocklist, evidence chain, and a
 real heuristic detector all work on live inputs — see "Run it for real" above.
 
-Discovery now has a **real local crawler** (`--crawl`): seed a portal, it
-harvests candidate stream/event pages and embed domains and runs them through
-the pipeline.
+Detection now has two backends: the stdlib **heuristic** classifier and a
+**headless** renderer (`--headless`) that catches JS-injected manifests over the
+network — verified capturing manifests a static fetch cannot see. Discovery has a
+real **seed crawler** (`--crawl`) and real **CT-log** search (`--discover-ct`),
+plus skeleton interfaces for reverse-infra / blocklist / search / social sources.
 
-The remaining ceiling is **detection on JS-rendered / multi-layer portals**: on
-real aggregators the manifest lives 2–3 clicks deep behind JavaScript and on a
-separate embed domain, so a static-HTML classifier sees only weak signals. The
-next build is a **headless-render collector** (Playwright/Chromium — free, not
-stdlib) that executes the page JS, catches the `.m3u8`, and follows the embed
-domain into attribution. The **perceptual-fingerprint / watermark** backend
-(needs a licensed reference feed) is the other stub. The `demo/` path remains a
-deterministic synthetic scenario for tests. See `ARCHITECTURE.md`.
+Remaining honest gaps: (1) reaching the actual match page *during a live event*
+(operational timing + deeper crawl), and (2) the **perceptual-fingerprint /
+watermark** backend that proves licensed-content match — that one needs the
+rights holder's reference feed and can't be done for free. The `demo/` path
+remains a deterministic synthetic scenario for tests. See `ARCHITECTURE.md`.
